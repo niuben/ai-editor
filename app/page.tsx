@@ -24,6 +24,11 @@ type GhostSuggestionStorage = {
   position: number | null;
 };
 
+type ParsedChapter = {
+  title: string;
+  body: string;
+};
+
 const emptyDoc = {
   type: "doc",
   content: [{ type: "paragraph" }],
@@ -124,6 +129,10 @@ export default function Home() {
       },
       handleDOMEvents: {
         focus: () => {
+          void generateGhostSuggestion();
+          return false;
+        },
+        click: () => {
           void generateGhostSuggestion();
           return false;
         },
@@ -243,11 +252,36 @@ export default function Home() {
       });
 
       setMessages((current) => [...current, { role: "assistant", content }]);
+      applyAssistantContent(content);
     } catch (error) {
       setMessages((current) => [...current, { role: "assistant", content: getErrorMessage(error) }]);
     } finally {
       setIsChatting(false);
     }
+  }
+
+  function applyAssistantContent(content: string) {
+    if (!editor) return;
+
+    const parsedChapters = parseChapters(content);
+
+    if (parsedChapters.length > 1) {
+      const now = Date.now();
+      const newChapters = parsedChapters.map((chapter, index) => ({
+        id: `chapter-${now}-${index}`,
+        title: chapter.title,
+        content: textToDoc(chapter.body),
+      }));
+
+      setChapters((current) => [...current, ...newChapters]);
+      setActiveChapterId(newChapters[0].id);
+      return;
+    }
+
+    const singleChapter = parsedChapters[0];
+    const textToInsert = singleChapter ? `${singleChapter.title}\n\n${singleChapter.body}` : content;
+    clearGhostSuggestion(editor);
+    editor.chain().focus().insertContent(textToInsert).run();
   }
 
   return (
@@ -426,6 +460,50 @@ function clearGhostSuggestion(editor: NonNullable<ReturnType<typeof useEditor>>)
   storage.text = "";
   storage.position = null;
   editor.view.dispatch(editor.state.tr.setMeta(ghostSuggestionKey, Date.now()));
+}
+
+function parseChapters(content: string): ParsedChapter[] {
+  const lines = content.split(/\r?\n/);
+  const chapters: ParsedChapter[] = [];
+  let current: ParsedChapter | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const titleMatch = line.match(/^(?:#{1,3}\s*)?((?:第\s*[一二三四五六七八九十百千万\d]+\s*[章节]|Chapter\s+\d+|Section\s+\d+)[:：、.\s-]*(.*))$/i);
+
+    if (titleMatch) {
+      if (current) chapters.push(current);
+      current = {
+        title: titleMatch[1].trim() || `第 ${chapters.length + 1} 章`,
+        body: "",
+      };
+      continue;
+    }
+
+    if (current) {
+      current.body = current.body ? `${current.body}\n${rawLine}` : rawLine;
+    }
+  }
+
+  if (current) chapters.push(current);
+
+  return chapters.filter((chapter) => chapter.title || chapter.body.trim());
+}
+
+function textToDoc(text: string): Record<string, unknown> {
+  const blocks = text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => ({
+      type: "paragraph",
+      content: [{ type: "text", text: block.replace(/\n/g, " ") }],
+    }));
+
+  return {
+    type: "doc",
+    content: blocks.length ? blocks : [{ type: "paragraph" }],
+  };
 }
 
 async function callDeepSeek(payload: Record<string, unknown>) {
