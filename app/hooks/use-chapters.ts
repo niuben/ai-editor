@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
-import { emptyDoc, initialChapters, manualPlanToDoc } from "../lib/documents";
-import type { Chapter, ManualAction } from "../lib/types";
+import { emptyDoc, initialChapters, novelPlanToDoc } from "../lib/documents";
+import type { Chapter, NovelAction } from "../lib/types";
 
 export function useChapters() {
   const [chapters, setChapters] = useState<Chapter[]>(initialChapters);
@@ -45,8 +45,8 @@ export function useChapters() {
     setActiveChapterId(newChapters[0].id);
   }
 
-  function applyManualAction(action: ManualAction) {
-    const plans = action.type === "create_manual" ? action.payload.chapters : [action.payload];
+  function applyNovelAction(action: NovelAction) {
+    const plans = action.type === "create_novel" ? action.payload.chapters : [action.payload];
     const validPlans = plans.filter((plan) => typeof plan.title === "string" && plan.title.trim());
 
     if (!validPlans.length) return 0;
@@ -55,7 +55,7 @@ export function useChapters() {
     const newChapters = validPlans.map((plan, index) => ({
       id: `chapter-${now}-${index}`,
       title: plan.title.trim(),
-      content: manualPlanToDoc(plan),
+      content: novelPlanToDoc(plan),
     }));
 
     appendChapters(newChapters);
@@ -71,6 +71,6 @@ export function useChapters() {
     updateActiveChapterContent,
     addChapter,
     appendChapters,
-    applyManualAction,
+    applyNovelAction,
   };
 }

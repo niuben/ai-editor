@@ -3,21 +3,21 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { useState } from "react";
 
 import { callDeepSeek, getErrorMessage } from "../lib/deepseek";
-import { parseManualAction } from "../lib/manual-actions";
-import type { Chapter, ChatMessage, ManualAction } from "../lib/types";
+import { parseNovelAction } from "../lib/novel-actions";
+import type { Chapter, ChatMessage, NovelAction } from "../lib/types";
 
 type UseChatOptions = {
   activeChapter: Chapter;
   editor: Editor | null;
   applyAssistantContent: (content: string) => void;
-  applyManualAction: (action: ManualAction) => number;
+  applyNovelAction: (action: NovelAction) => number;
 };
 
 export function useChat({
   activeChapter,
   editor,
   applyAssistantContent,
-  applyManualAction,
+  applyNovelAction,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "system", content: "右侧可以和 DeepSeek 对话。左侧编辑器里按 Tab 可以尝试自动扩写。" },
@@ -55,10 +55,10 @@ export function useChat({
         ],
       });
 
-      const action = parseManualAction(content);
+      const action = parseNovelAction(content);
 
       if (action) {
-        const createdCount = applyManualAction(action);
+        const createdCount = applyNovelAction(action);
         pushMessage({ role: "assistant", content: `已根据你的需求自动创建 ${createdCount} 个章节。` });
         return;
       }
@@ -72,7 +72,7 @@ export function useChat({
     }
   }
 
-  async function generateManual() {
+  async function generateNovel() {
     const prompt = chatInput.trim();
     if (!prompt || isChatting) return;
 
@@ -82,20 +82,20 @@ export function useChat({
 
     try {
       const content = await callDeepSeek({
-        mode: "manual",
+        mode: "novel",
         prompt,
       });
-      const action = parseManualAction(content);
+      const action = parseNovelAction(content);
 
       if (!action) {
-        pushMessage({ role: "assistant", content: "没有识别到可创建章节的手册结构，请换一种描述再试。" });
+        pushMessage({ role: "assistant", content: "没有识别到可创建章节的小说结构，请换一种描述再试。" });
         return;
       }
 
-      const createdCount = applyManualAction(action);
+      const createdCount = applyNovelAction(action);
       pushMessage({
         role: "assistant",
-        content: `已创建 ${createdCount} 个章节，并为每章写入摘要和小节清单。`,
+        content: `已创建 ${createdCount} 个章节，并写入每章内容。`,
       });
     } catch (error) {
       pushMessage({ role: "assistant", content: getErrorMessage(error) });
@@ -110,7 +110,7 @@ export function useChat({
     isChatting,
     setChatInput,
     sendMessage,
-    generateManual,
+    generateNovel,
     pushMessage,
   };
 }

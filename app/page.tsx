@@ -19,7 +19,7 @@ export default function Home() {
     updateActiveChapterContent,
     addChapter,
     appendChapters,
-    applyManualAction,
+    applyNovelAction,
   } = useChapters();
 
   const editorState = useEditor({
@@ -32,7 +32,7 @@ export default function Home() {
     activeChapter,
     editor: editorState.editor,
     applyAssistantContent: editorState.applyAssistantContent,
-    applyManualAction,
+    applyNovelAction,
   });
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function Home() {
         isChatting={chatState.isChatting}
         messages={chatState.messages}
         onChangeChatInput={chatState.setChatInput}
-        onGenerateManual={() => void chatState.generateManual()}
+        onGenerateNovel={() => void chatState.generateNovel()}
         onSendMessage={chatState.sendMessage}
       />
     </main>

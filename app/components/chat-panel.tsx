@@ -8,7 +8,7 @@ type ChatPanelProps = {
   isChatting: boolean;
   onChangeChatInput: (value: string) => void;
   onSendMessage: (event: KeyboardEvent<HTMLTextAreaElement> | FormEvent) => void;
-  onGenerateManual: () => void;
+  onGenerateNovel: () => void;
 };
 
 export function ChatPanel({
@@ -17,7 +17,7 @@ export function ChatPanel({
   isChatting,
   onChangeChatInput,
   onSendMessage,
-  onGenerateManual,
+  onGenerateNovel,
 }: ChatPanelProps) {
   return (
     <aside className="panel chat-panel">
@@ -50,12 +50,12 @@ export function ChatPanel({
           发送 Cmd/Ctrl + Enter
         </button>
         <button
-          className="manual-generate-button"
+          className="novel-generate-button"
           disabled={isChatting || !chatInput.trim()}
-          onClick={onGenerateManual}
+          onClick={onGenerateNovel}
           type="button"
         >
-          生成手册并创建章节
+          生成小说并创建章节
         </button>
       </form>
     </aside>

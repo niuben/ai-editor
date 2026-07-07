@@ -1,4 +1,4 @@
-import type { Chapter, ManualChapterPlan, ParsedChapter } from "./types";
+import type { Chapter, NovelChapterPlan, ParsedChapter } from "./types";
 
 export const emptyDoc = {
   type: "doc",
@@ -67,14 +67,6 @@ export function textToDoc(text: string): Record<string, unknown> {
   };
 }
 
-export function manualPlanToDoc(plan: ManualChapterPlan): Record<string, unknown> {
-  const sections = Array.isArray(plan.sections)
-    ? plan.sections.filter((section) => typeof section === "string" && section.trim())
-    : [];
-  const blocks = [
-    plan.summary ? `章节目标：${plan.summary}` : "章节目标：待补充。",
-    ...(sections.length ? ["小节：", ...sections.map((section) => `- ${section}`)] : []),
-  ];
-
-  return textToDoc(blocks.join("\n\n"));
+export function novelPlanToDoc(plan: NovelChapterPlan): Record<string, unknown> {
+  return textToDoc(typeof plan.content === "string" ? plan.content : "");
 }

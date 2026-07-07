@@ -14,21 +14,20 @@ export type ParsedChapter = {
   body: string;
 };
 
-export type ManualChapterPlan = {
+export type NovelChapterPlan = {
   title: string;
-  summary?: string;
-  sections?: string[];
+  content: string;
 };
 
-export type ManualAction =
+export type NovelAction =
   | {
-      type: "create_manual";
+      type: "create_novel";
       payload: {
         title?: string;
-        chapters: ManualChapterPlan[];
+        chapters: NovelChapterPlan[];
       };
     }
   | {
       type: "create_chapter";
-      payload: ManualChapterPlan;
+      payload: NovelChapterPlan;
     };
