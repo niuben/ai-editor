@@ -28,6 +28,7 @@ body {
   background: radial-gradient(circle at top left, #fff8e9 0, var(--bg) 36%, #ece5dd 100%);
   color: var(--text);
   font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  overflow: hidden;
 }
 
 button,
@@ -46,11 +47,13 @@ select {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 380px;
   gap: 18px;
-  min-height: 100vh;
+  height: 100vh;
   padding: 18px;
 }
 
 .panel {
+  height: 100%;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 28px;
   background: color-mix(in srgb, var(--panel) 92%, white);
@@ -60,6 +63,7 @@ select {
 .chapters {
   display: flex;
   flex-direction: column;
+  overflow: auto;
   padding: 18px;
 }
 
@@ -139,6 +143,7 @@ select {
   display: grid;
   grid-template-rows: 46px minmax(0, 1fr);
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   border-radius: 14px;
   background: var(--editor-canvas);
@@ -467,11 +472,13 @@ select {
 @media (max-width: 720px) {
   .app-shell {
     grid-template-columns: 1fr;
+    height: 100vh;
     padding: 10px;
+    overflow: auto;
   }
 
   .editor-panel {
-    min-height: 760px;
+    height: 760px;
   }
 
   .toolbar {
