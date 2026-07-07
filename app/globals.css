@@ -432,6 +432,12 @@ select {
   font-weight: 800;
 }
 
+.chat-form .manual-generate-button {
+  border: 1px solid #d6c5b2;
+  background: #fff7ea;
+  color: var(--accent-dark);
+}
+
 .chat-form button:disabled,
 .add-chapter:disabled {
   cursor: not-allowed;
