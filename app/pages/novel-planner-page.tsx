@@ -26,13 +26,13 @@ const generatedStepDescriptions: Record<GeneratedStep, string> = {
 
 function createStepState(): StepState {
   return {
-  content: "",
-  isLoading: false,
-  error: null,
+    content: "",
+    isLoading: false,
+    error: null,
   };
 }
 
-export default function NovelPlannerPage() {
+export function NovelPlannerPage() {
   const [premise, setPremise] = useState("");
   const [steps, setSteps] = useState<Record<GeneratedStep, StepState>>({
     characters_plot: createStepState(),
