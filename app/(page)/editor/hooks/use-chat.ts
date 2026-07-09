@@ -2,9 +2,9 @@ import type { Editor } from "@tiptap/react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useState } from "react";
 
-import { callDeepSeek, getErrorMessage } from "../lib/deepseek";
-import { parseNovelAction } from "../lib/novel-actions";
-import type { Chapter, ChatMessage, NovelAction } from "../lib/types";
+import { callDeepSeek, getErrorMessage } from "../../../lib/deepseek";
+import { parseNovelAction } from "../../../lib/novel-actions";
+import type { Chapter, ChatMessage, NovelAction } from "../../../lib/types";
 
 type UseChatOptions = {
   activeChapter: Chapter;
