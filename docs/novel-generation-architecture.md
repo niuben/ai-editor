@@ -1,145 +1,92 @@
 # Novel Generation Architecture
 
-## Current Scope
+## Scope
 
-This document describes the MVP architecture for a single-user novel generation editor.
+This document describes the architecture for generating a complete novel in the MVP.
 
-Current product constraints:
+Current generation strategy:
 
-- Login is not required yet.
-- Users can create and manage multiple novels.
-- Novel chapter content is stored as plain text.
-- Chat history must be persisted long term.
-- Full-novel generation is triggered from the frontend and executed chapter by chapter.
-- Background workers are not included in the MVP, but the data model should remain worker-friendly.
-- Version rollback is required at the chapter level.
+- Single-user MVP.
+- No background worker yet.
+- The frontend starts the full-novel generation flow.
+- The backend generates a novel plan first.
+- The frontend then calls the backend chapter by chapter.
+- Each generated chapter is persisted as plain text.
+- Each generated chapter creates a `ChapterVersion` checkpoint.
+- `GenerationJob` records progress and makes future worker migration easier.
 
-## High-Level Architecture
+Related documents:
+
+- [System Architecture](./system-architecture.md)
+- [AI Provider Architecture](./ai-provider-architecture.md)
+- [Novel Translation Architecture](./novel-translation-architecture.md)
+
+## High-Level Flow
 
 ```txt
-React UI
+User prompt
   ↓
-Zustand UI State
+POST /api/novels/generate-plan
   ↓
-React Query
+AI Provider: generateNovelPlan
   ↓
-Next.js Route Handlers
+Create Novel + Chapter placeholders + GenerationJob
   ↓
-Database
+Frontend loops through chapters
   ↓
-AI Provider
+POST /api/novels/:novelId/chapters/:chapterId/generate
+  ↓
+AI Provider: generateChapterContent
+  ↓
+Update Chapter + create ChapterVersion
+  ↓
+Complete GenerationJob + Novel
 ```
 
-Responsibilities:
+The product appears to support one-click full novel generation, but the MVP implementation uses frontend-orchestrated sequential chapter generation.
 
-- React UI: renders novels, chapters, editor, chat, and generation progress.
-- Zustand: stores UI-only state such as active novel and active chapter.
-- React Query: fetches server data, caches it, and runs mutations.
-- Next.js Route Handlers: provide CRUD APIs and generation APIs.
-- Database: persists novels, chapters, chat messages, and generation jobs.
-- Database also persists chapter versions for rollback.
-- AI Provider: wraps model calls and prompt logic.
+## Responsibilities
 
-## Core Modules
+### Frontend
 
-### Novel Module
+- Collect user generation prompt and options.
+- Start novel plan generation.
+- Set active novel and active chapter.
+- Loop through generated chapter placeholders.
+- Call the chapter generation API for each chapter.
+- Display progress.
+- Stop on failure.
+- Allow retry for failed chapters.
+- Refresh React Query caches after each generated chapter.
 
-Manages multiple novel projects.
+### Next.js API
 
-Responsibilities:
+- Validate generation requests.
+- Create novel records.
+- Create chapter placeholders.
+- Create and update generation jobs.
+- Call AI Provider capability functions.
+- Persist generated chapter content.
+- Create chapter versions.
+- Return typed API responses to the frontend.
 
-- Create novel.
-- Update title, description, genre, and style.
-- List novels.
-- Get novel detail.
-- Delete novel.
-- Track novel generation status.
+### AI Provider
 
-### Chapter Module
-
-Manages chapters under each novel.
-
-Responsibilities:
-
-- Create chapter.
-- Update chapter title.
-- Update chapter content.
-- Delete chapter.
-- Sort chapters.
-- Track per-chapter generation status.
-
-### Chapter Version Module
-
-Manages rollback history for chapter content.
-
-Responsibilities:
-
-- Create a chapter version when AI generation completes.
-- Create a chapter version when the user explicitly saves a version.
-- Create a new version when restoring an older version.
-- List chapter versions.
-- Read a historical version.
-- Restore a chapter from a historical version.
-
-The MVP versioning scope is chapter-level only. Full-novel snapshots are intentionally deferred.
-
-### Generation Module
-
-Coordinates AI generation.
-
-Responsibilities:
-
-- Generate a novel plan.
-- Create novel and chapter placeholders.
-- Generate one chapter at a time.
-- Track progress through a generation job.
-- Stop on failure and allow retry.
-
-### Chat Module
-
-Persists long-term chat history.
-
-Responsibilities:
-
-- Store messages by novel.
-- Optionally associate messages with a chapter.
-- Load chat history for a novel.
-- Save user and assistant messages.
-
-### AI Provider Module
-
-Encapsulates model-specific logic.
-
-Responsibilities:
-
-- Call DeepSeek or another model provider.
 - Build prompts.
-- Parse model outputs.
-- Expose typed generation functions to route handlers.
+- Call the selected model provider.
+- Parse JSON responses.
+- Validate output shape.
+- Normalize model errors.
 
-### Editor Module
+See [AI Provider Architecture](./ai-provider-architecture.md) for provider and prompt management details.
 
-Manages the current chapter editing experience.
+### Database
 
-Responsibilities:
-
-- Load current chapter content.
-- Edit plain text content.
-- Save content through mutation.
-- Handle local editor-only state.
-
-### UI State Module
-
-Stores frontend-only state.
-
-Examples:
-
-- `activeNovelId`
-- `activeChapterId`
-- `rightPanelTab`
-- `sidebarCollapsed`
-
-Do not store server data such as full novels, chapters, or chat messages in Zustand. Those belong in React Query.
+- Persist novels.
+- Persist chapters.
+- Persist chapter versions.
+- Persist generation jobs.
+- Persist chat messages separately from generation.
 
 ## Data Model
 
@@ -152,10 +99,20 @@ type Novel = {
   description?: string;
   genre?: string;
   style?: string;
+  language: string;
+  kind: "original" | "translation";
+  originalNovelId?: string;
   status: "draft" | "planning" | "generating" | "completed" | "failed";
   createdAt: Date;
   updatedAt: Date;
 };
+```
+
+Generation creates original novels with:
+
+```txt
+kind = original
+status = generating
 ```
 
 ### Chapter
@@ -167,9 +124,11 @@ type Chapter = {
   title: string;
   brief?: string;
   content: string;
+  order: number;
+  originalChapterId?: string;
+  originalChapterVersionId?: string;
   currentVersionId?: string;
   versionNumber: number;
-  order: number;
   status: "pending" | "generating" | "completed" | "failed";
   errorMessage?: string;
   createdAt: Date;
@@ -177,9 +136,14 @@ type Chapter = {
 };
 ```
 
-`brief` is the chapter plan generated by the planner. `content` is the final chapter body.
+During plan generation, chapters are created with:
 
-`Chapter` stores the current editable content for fast reads. Historical snapshots are stored in `ChapterVersion`.
+```txt
+brief = planner output for the chapter
+content = ""
+status = pending
+versionNumber = 0
+```
 
 ### ChapterVersion
 
@@ -192,43 +156,22 @@ type ChapterVersion = {
   content: string;
   source: "user" | "ai" | "system";
   reason?: string;
+  originalChapterVersionId?: string;
+  promptVersion?: string;
+  provider?: string;
+  model?: string;
+  temperature?: number;
   versionNumber: number;
   createdAt: Date;
 };
 ```
 
-Version source meanings:
-
-- `user`: user explicitly saved a version.
-- `ai`: AI generated or rewrote chapter content.
-- `system`: system-created version, such as restore operations or imports.
-
-Rollback does not delete history and does not move a pointer back to an old version. Restoring a version creates a new version from the selected historical content.
-
-Example:
+AI-generated chapter content creates a version with:
 
 ```txt
-v1
-v2
-v3
-v4
-v5 = restored from v2
+source = ai
+reason = AI generated chapter content
 ```
-
-### ChatMessage
-
-```ts
-type ChatMessage = {
-  id: string;
-  novelId: string;
-  chapterId?: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  createdAt: Date;
-};
-```
-
-`chapterId` is optional because some messages are about the whole novel and others are about one chapter.
 
 ### GenerationJob
 
@@ -236,286 +179,213 @@ type ChatMessage = {
 type GenerationJob = {
   id: string;
   novelId: string;
-  type: "plan_novel" | "write_chapter" | "write_full_novel";
+  type: "plan_novel" | "write_chapter" | "write_full_novel" | "translate_novel" | "translate_chapter";
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   currentChapterId?: string;
   totalChapters: number;
   completedChapters: number;
+  promptVersion?: string;
+  provider?: string;
+  model?: string;
   errorMessage?: string;
   createdAt: Date;
   updatedAt: Date;
 };
 ```
 
-The MVP does not use a worker, but `GenerationJob` still records progress and makes a future worker migration easier.
+The MVP does not run a worker, but the job still tracks progress.
 
-## Frontend Structure
+## AI Capabilities Used
 
-Suggested structure:
+### generateNovelPlan
+
+Purpose:
 
 ```txt
-app/
-  components/
-    NovelSidebar.tsx
-    ChapterList.tsx
-    EditorPanel.tsx
-    ChatPanel.tsx
-    GenerationProgress.tsx
-
-  hooks/
-    queries/
-      useNovels.ts
-      useNovel.ts
-      useChapters.ts
-      useChapterVersions.ts
-      useChatMessages.ts
-      useGenerationJob.ts
-
-    mutations/
-      useCreateNovel.ts
-      useUpdateNovel.ts
-      useCreateChapter.ts
-      useUpdateChapter.ts
-      useCreateChapterVersion.ts
-      useRestoreChapterVersion.ts
-      useGenerateNovelPlan.ts
-      useGenerateChapter.ts
-      useCreateGenerationJob.ts
-      useUpdateGenerationJob.ts
-
-  store/
-    ui-store.ts
+Generate title, description, chapter list, and chapter briefs from the user's novel request.
 ```
 
-### Zustand State
+Input:
 
 ```ts
-type UiState = {
-  activeNovelId: string | null;
-  activeChapterId: string | null;
-  rightPanelTab: "chat" | "generation";
-  sidebarCollapsed: boolean;
+type GenerateNovelPlanInput = {
+  prompt: string;
+  chapterCount?: number;
+  language?: string;
+  genre?: string;
+  style?: string;
+  targetWordCountPerChapter?: number;
 };
 ```
 
-### React Query Data
+Output:
 
-React Query owns server data:
+```ts
+type NovelPlan = {
+  title: string;
+  description?: string;
+  chapters: {
+    order: number;
+    title: string;
+    brief: string;
+  }[];
+};
+```
 
-- novels
-- current novel
-- chapters
-- current chapter
-- chapter versions
-- chat messages
-- generation jobs
+### generateChapterContent
+
+Purpose:
+
+```txt
+Generate the full content for one chapter.
+```
+
+Input:
+
+```ts
+type GenerateChapterContentInput = {
+  novel: Novel;
+  chapters: Pick<Chapter, "title" | "brief" | "order">[];
+  chapter: Pick<Chapter, "title" | "brief" | "order">;
+  previousContext?: string;
+  targetWordCount?: number;
+};
+```
+
+Output:
+
+```ts
+type ChapterDraft = {
+  title: string;
+  content: string;
+};
+```
 
 ## API Design
 
-### Novel APIs
+### Generate Novel Plan
 
 ```txt
-GET    /api/novels
-POST   /api/novels
-GET    /api/novels/:novelId
-PATCH  /api/novels/:novelId
-DELETE /api/novels/:novelId
+POST /api/novels/generate-plan
 ```
 
-### Chapter APIs
-
-```txt
-GET    /api/novels/:novelId/chapters
-POST   /api/novels/:novelId/chapters
-PATCH  /api/novels/:novelId/chapters/:chapterId
-DELETE /api/novels/:novelId/chapters/:chapterId
-```
-
-### Chapter Version APIs
-
-```txt
-GET    /api/novels/:novelId/chapters/:chapterId/versions
-POST   /api/novels/:novelId/chapters/:chapterId/versions
-GET    /api/novels/:novelId/chapters/:chapterId/versions/:versionId
-POST   /api/novels/:novelId/chapters/:chapterId/versions/:versionId/restore
-```
-
-#### GET /versions
-
-Returns the version history list for one chapter. The list can omit full `content` for performance and only return metadata.
-
-Example response:
+Request:
 
 ```ts
 {
-  versions: [
-    {
-      id: "version-3",
-      novelId: "novel-1",
-      chapterId: "chapter-1",
-      title: "Chapter 1: The Rain Returns",
-      source: "ai",
-      reason: "AI generated chapter content",
-      versionNumber: 3,
-      createdAt: "2026-07-09T12:00:00.000Z"
-    }
-  ]
+  prompt: string;
+  chapterCount?: number;
+  language?: string;
+  genre?: string;
+  style?: string;
+  targetWordCountPerChapter?: number;
 }
 ```
 
-#### POST /versions
+Backend behavior:
 
-Creates a checkpoint version for the chapter.
+```txt
+1. Validate request.
+2. Set job-like status to planning/generating.
+3. Call AI Provider generateNovelPlan.
+4. Create Novel with status=generating.
+5. Create Chapter placeholders with status=pending.
+6. Create GenerationJob with type=write_full_novel and status=running.
+7. Return novel, chapters, and job.
+```
 
-By default, the backend should use the current `Chapter.title` and `Chapter.content`.
-
-Example request:
+Response:
 
 ```ts
 {
-  source: "user",
-  reason: "User saved version"
+  novel: Novel;
+  chapters: Chapter[];
+  job: GenerationJob;
 }
 ```
 
-Optional request fields:
+### Generate One Chapter
+
+```txt
+POST /api/novels/:novelId/chapters/:chapterId/generate
+```
+
+Backend behavior:
+
+```txt
+1. Load Novel.
+2. Load target Chapter.
+3. Load all chapters for the novel ordered by order.
+4. Build previousContext from previous chapter summaries or content.
+5. Update Chapter.status=generating.
+6. Call AI Provider generateChapterContent.
+7. Update Chapter.title/content/status=completed.
+8. Increment Chapter.versionNumber.
+9. Create ChapterVersion with source=ai.
+10. Set Chapter.currentVersionId to the new version.
+11. Update GenerationJob progress.
+12. Return chapter and version.
+```
+
+Response:
 
 ```ts
 {
-  title?: string;
-  content?: string;
-  source: "user" | "ai" | "system";
-  reason?: string;
+  chapter: Chapter;
+  version: ChapterVersion;
+  job?: GenerationJob;
 }
 ```
 
-Expected backend behavior:
+### Update Generation Job
 
 ```txt
-1. Read current Chapter if title/content are not provided.
-2. Increment Chapter.versionNumber.
-3. Create ChapterVersion with the new version number.
-4. Update Chapter.currentVersionId to the new version.
-5. Return the created version.
+PATCH /api/generation-jobs/:jobId
 ```
 
-#### GET /versions/:versionId
+Used by the frontend to mark a frontend-orchestrated job as completed, failed, or cancelled.
 
-Returns a single historical version, including full content.
-
-Example response:
+Request:
 
 ```ts
 {
-  version: {
-    id: "version-3",
-    novelId: "novel-1",
-    chapterId: "chapter-1",
-    title: "Chapter 1: The Rain Returns",
-    content: "Full historical chapter content...",
-    source: "ai",
-    reason: "AI generated chapter content",
-    versionNumber: 3,
-    createdAt: "2026-07-09T12:00:00.000Z"
-  }
+  status?: "running" | "completed" | "failed" | "cancelled";
+  currentChapterId?: string;
+  completedChapters?: number;
+  errorMessage?: string;
 }
 ```
 
-#### POST /versions/:versionId/restore
-
-Restores a historical version into the current chapter.
-
-Restore must not delete history and must not move `currentVersionId` back to the old version. Instead, restoring creates a new version from the selected historical content.
-
-Example:
+### Get Chapters
 
 ```txt
-Current version: v7
-User restores: v3
-New current version: v8, copied from v3
+GET /api/novels/:novelId/chapters
 ```
 
-Expected backend behavior:
+Used by React Query to refresh chapter status and content during generation.
 
-```txt
-1. Read the selected ChapterVersion.
-2. Update Chapter.title and Chapter.content from that version.
-3. Increment Chapter.versionNumber.
-4. Create a new ChapterVersion with source=system.
-5. Set reason to something like "Restored from v3".
-6. Set Chapter.currentVersionId to the new version.
-7. Return the updated chapter and the new version.
-```
+## Frontend Orchestration
 
-Example response:
+The frontend owns the generation loop in the MVP.
 
 ```ts
-{
-  chapter: {
-    id: "chapter-1",
-    title: "Chapter 1: The Rain Returns",
-    content: "Restored chapter content...",
-    currentVersionId: "version-8",
-    versionNumber: 8
-  },
-  version: {
-    id: "version-8",
-    source: "system",
-    reason: "Restored from v3",
-    versionNumber: 8
-  }
-}
-```
-
-### Chat APIs
-
-```txt
-GET    /api/novels/:novelId/chat-messages
-POST   /api/novels/:novelId/chat-messages
-```
-
-### Generation APIs
-
-```txt
-POST   /api/novels/generate-plan
-POST   /api/novels/:novelId/chapters/:chapterId/generate
-POST   /api/generation-jobs
-GET    /api/generation-jobs/:jobId
-PATCH  /api/generation-jobs/:jobId
-```
-
-## Full-Novel Generation Flow
-
-The UI exposes one action: generate a complete novel.
-
-The MVP implementation executes it as multiple frontend-controlled API calls.
-
-```txt
-1. User enters a prompt.
-2. Frontend calls POST /api/novels/generate-plan.
-3. Backend calls AI Provider to generate a novel plan.
-4. Backend creates Novel.
-5. Backend creates Chapter placeholders with status=pending.
-6. Backend creates GenerationJob with status=running.
-7. Backend returns novel, chapters, and job.
-8. Frontend sets activeNovelId and activeChapterId.
-9. Frontend loops through chapters in order.
-10. For each chapter, frontend calls POST /api/novels/:novelId/chapters/:chapterId/generate.
-11. Backend generates chapter content and updates chapter status/content.
-12. Backend creates a ChapterVersion with source=ai and reason="AI generated chapter content".
-13. Frontend invalidates React Query chapter and version queries after each chapter.
-14. After all chapters complete, frontend marks the job and novel completed.
-```
-
-Example orchestration:
-
-```ts
-const result = await generateNovelPlan.mutateAsync({ prompt });
+const result = await generateNovelPlan.mutateAsync({
+  prompt,
+  chapterCount,
+  language,
+  genre,
+  style,
+});
 
 setActiveNovelId(result.novel.id);
-setActiveChapterId(result.chapters[0].id);
+setActiveChapterId(result.chapters[0]?.id ?? null);
 
 for (const chapter of result.chapters) {
+  await updateGenerationJob.mutateAsync({
+    jobId: result.job.id,
+    currentChapterId: chapter.id,
+  });
+
   await generateChapter.mutateAsync({
     novelId: result.novel.id,
     chapterId: chapter.id,
@@ -533,143 +403,182 @@ for (const chapter of result.chapters) {
 await updateGenerationJob.mutateAsync({
   jobId: result.job.id,
   status: "completed",
+  completedChapters: result.chapters.length,
 });
+```
+
+## React Query Hooks
+
+Suggested query hooks:
+
+```txt
+useNovels
+useNovel
+useChapters
+useGenerationJob
+useChapterVersions
+```
+
+Suggested mutation hooks:
+
+```txt
+useGenerateNovelPlan
+useGenerateChapter
+useUpdateGenerationJob
+useCreateChapterVersion
+```
+
+The generation loop should use `mutateAsync` so chapters run sequentially.
+
+## Zustand UI State
+
+Zustand should store only UI state:
+
+```ts
+type UiState = {
+  activeNovelId: string | null;
+  activeChapterId: string | null;
+  rightPanelTab: "chat" | "generation" | "versions";
+  sidebarCollapsed: boolean;
+};
+```
+
+Do not store full novels, chapters, or versions in Zustand. They are server data owned by React Query.
+
+## Progress Display
+
+The UI should show:
+
+- total chapters.
+- completed chapters.
+- current generating chapter.
+- failed chapter, if any.
+- retry action.
+- cancel action, optional for MVP.
+
+Progress can be derived from:
+
+```txt
+GenerationJob.completedChapters
+GenerationJob.totalChapters
+GenerationJob.currentChapterId
+Chapter.status
 ```
 
 ## Failure Handling
 
-If a chapter generation fails:
+If one chapter fails:
 
 ```txt
-chapter.status = failed
-chapter.errorMessage = error message
-job.status = failed
-job.errorMessage = error message
-frontend stops the generation loop
+1. Set Chapter.status=failed.
+2. Store Chapter.errorMessage.
+3. Set GenerationJob.status=failed.
+4. Store GenerationJob.errorMessage.
+5. Stop the frontend loop.
+6. Show retry action.
 ```
 
-The UI should show a retry button for failed chapters.
-
-Retry action:
+Retry uses the same chapter generation endpoint:
 
 ```txt
 POST /api/novels/:novelId/chapters/:chapterId/generate
 ```
 
-If retry succeeds, the backend should update the chapter content and create a new `ChapterVersion` with `source=ai`.
-
-## Versioning Strategy
-
-Versioning starts at the chapter level.
-
-The current chapter body remains in `Chapter.content`. Historical snapshots are stored in `ChapterVersion`.
-
-Create a `ChapterVersion` when:
-
-- AI chapter generation completes.
-- AI rewrites a chapter.
-- User explicitly saves a version.
-- User restores a previous version.
-
-Do not create a permanent version on every keystroke or every autosave. Autosave should update `Chapter.content` only. Permanent versions should be checkpoints.
-
-MVP version actions:
-
-- List versions.
-- Open a historical version.
-- Restore a version.
-
-Deferred version actions:
-
-- Diff current content against a historical version.
-- Full-novel snapshots.
-- Branching versions.
-- Collaborative conflict resolution.
-
-### Restore Flow
+If retry succeeds:
 
 ```txt
-1. User selects a historical version.
-2. Frontend calls POST /versions/:versionId/restore.
-3. Backend reads the historical ChapterVersion.
-4. Backend updates Chapter.title and Chapter.content.
-5. Backend increments Chapter.versionNumber.
-6. Backend creates a new ChapterVersion from the restored content.
-7. Backend sets Chapter.currentVersionId to the new version.
-8. Frontend invalidates current chapter and version queries.
+1. Update Chapter.content.
+2. Create new ChapterVersion.
+3. Continue generation from the next pending chapter, if the user chooses to resume.
 ```
 
-## AI Provider Interface
+## Chapter Versioning During Generation
 
-Suggested server-side functions:
+Each successful AI-generated chapter must create a `ChapterVersion`.
 
-```ts
-type NovelPlan = {
-  title: string;
-  description?: string;
-  chapters: {
-    title: string;
-    brief: string;
-    order: number;
-  }[];
-};
+Version metadata:
 
-async function generateNovelPlan(prompt: string): Promise<NovelPlan>;
-
-async function generateChapterContent(input: {
-  novel: Novel;
-  chapters: Chapter[];
-  chapter: Chapter;
-  previousSummary?: string;
-}): Promise<string>;
+```txt
+source = ai
+reason = AI generated chapter content
+promptVersion = CHAPTER_WRITER_PROMPT_VERSION
+provider = active provider
+model = active model
 ```
 
-The planner generates structure only. The chapter writer generates full chapter body text.
+This makes rollback, audit, and generation quality debugging possible.
 
-## Limitations Of The MVP
+## Previous Context Strategy
 
-- Closing or refreshing the browser can interrupt full-novel generation.
-- Long novels depend on the browser staying open.
-- There is no concurrency control across users.
-- There is no queue, retry scheduler, or background recovery.
-- Multi-user access is not addressed yet.
+Writing later chapters requires context.
+
+MVP options:
+
+```txt
+Option A: include previous 1-2 chapter contents.
+Option B: include summaries of previous chapters.
+Option C: include both recent chapter content and older summaries.
+```
+
+Recommended MVP:
+
+```txt
+Use previous 1 chapter content plus the full chapter outline.
+```
+
+Future improvement:
+
+```txt
+Generate and store ChapterSummary after each chapter.
+Use summaries for long-range continuity.
+```
+
+## MVP Limitations
+
+- Browser refresh can interrupt the generation loop.
+- Browser close stops generation.
+- There is no background recovery.
+- There is no multi-user concurrency control.
+- Long novels depend on the frontend staying open.
+- Previous context may become too large for long novels without summaries.
 
 ## Worker Migration Path
 
-This architecture is intentionally worker-friendly.
+This design intentionally keeps worker migration simple.
 
 Current MVP:
 
 ```txt
-Frontend loops through chapters and calls generate chapter APIs.
+Frontend loops through chapters.
 ```
 
-Future architecture:
+Future worker version:
 
 ```txt
 Frontend calls POST /api/novels/:novelId/generate-full.
-Backend creates a job.
-Worker loops through chapters and calls the same AI Provider functions.
-Frontend polls GenerationJob and chapter statuses.
+Backend creates job.
+Worker loops through chapters.
+Frontend polls job and chapter statuses.
 ```
 
-Unchanged pieces during migration:
+Unchanged parts:
 
-- Novel model
-- Chapter model
-- ChapterVersion model
-- GenerationJob model
-- AI Provider interface
-- Chapter status lifecycle
+- `Novel`
+- `Chapter`
+- `ChapterVersion`
+- `GenerationJob`
+- AI Provider capability functions
+- chapter status lifecycle
 - React Query progress display
 
-Changed pieces during migration:
+Changed part:
 
-- The chapter generation loop moves from frontend to worker.
-- Frontend stops calling each chapter generation endpoint directly.
+```txt
+The generation loop moves from frontend to worker.
+```
 
 ## Summary
 
-The MVP uses Next.js APIs, React Query, Zustand, a database, and AI Provider functions to support multi-novel generation and editing.
+The MVP generates a complete novel through a two-stage flow: plan first, then sequential chapter generation.
 
-Full-novel generation appears as a single user action, but is implemented as frontend-controlled sequential chapter generation. This keeps the MVP simple while preserving a clean path to background workers later.
+This keeps implementation simple while preserving the data model and API boundaries needed for future background worker orchestration.
