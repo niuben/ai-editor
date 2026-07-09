@@ -1,13 +1,10 @@
-export type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+import type { AIMessage } from "./types";
 
 export type PlanStep = "characters_plot" | "worldview" | "style";
 
-export type DeepSeekRequestBody = {
+export type LegacyAIRequestBody = {
   mode?: "chat" | "expand" | "novel" | "plan_step";
-  messages?: ChatMessage[];
+  messages?: AIMessage[];
   prompt?: string;
   step?: PlanStep;
   context?: {

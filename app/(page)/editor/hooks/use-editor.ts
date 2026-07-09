@@ -9,10 +9,10 @@ import {
   GhostSuggestion,
   getGhostSuggestion,
   setGhostSuggestion,
-} from "../../../lib/editor/ghost-suggestion";
-import { callDeepSeek, getErrorMessage } from "../../../lib/deepseek";
-import { parseChapters, textToDoc } from "../../../lib/documents";
-import type { Chapter } from "../../../lib/types";
+} from "@/app/lib/editor/ghost-suggestion";
+import { callLegacyAI, getAIErrorMessage } from "@/app/lib/ai/client";
+import { parseChapters, textToDoc } from "@/app/lib/documents";
+import type { Chapter } from "@/app/lib/types";
 
 type UseEditorOptions = {
   activeChapter: Chapter;
@@ -41,7 +41,7 @@ export function useEditor({
 
     setIsSuggesting(true);
     try {
-      const content = await callDeepSeek({
+      const content = await callLegacyAI({
         mode: "expand",
         chapterTitle: activeChapter.title,
         chapterText: editor.getText(),
@@ -52,7 +52,7 @@ export function useEditor({
         setGhostSuggestion(editor, content, position);
       }
     } catch (error) {
-      setSuggestionError(getErrorMessage(error));
+      setSuggestionError(getAIErrorMessage(error));
     } finally {
       setIsSuggesting(false);
     }

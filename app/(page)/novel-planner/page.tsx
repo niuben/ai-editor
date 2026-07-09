@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { callDeepSeek, getErrorMessage } from "../../lib/deepseek";
+import { useGenerateFullNovel } from "./hooks/use-generate-full-novel";
 
 type GeneratedStep = "characters_plot" | "worldview" | "style";
 
@@ -40,9 +41,7 @@ export default function NovelPlannerPage() {
     style: createStepState(),
   });
   const [activeIndex, setActiveIndex] = useState(0);
-  const [finalNovel, setFinalNovel] = useState("");
-  const [isGeneratingNovel, setIsGeneratingNovel] = useState(false);
-  const [finalError, setFinalError] = useState<string | null>(null);
+  const generatedNovel = useGenerateFullNovel();
 
   const canGenerateCharacters = Boolean(premise.trim());
   const canGenerateWorldview = canGenerateCharacters && Boolean(steps.characters_plot.content);
@@ -98,24 +97,14 @@ export default function NovelPlannerPage() {
   }
 
   async function generateFinalNovel() {
-    if (!canGenerateNovel || isGeneratingNovel) return;
+    if (!canGenerateNovel || generatedNovel.isGenerating) return;
 
-    setIsGeneratingNovel(true);
-    setFinalError(null);
-    setFinalNovel("");
-
-    try {
-      const content = await callDeepSeek({
-        mode: "novel",
-        prompt: `${contextSummary}\n\n请基于以上完整上下文生成一部短篇小说，创建 4 到 6 个章节。每章需要有明确标题和完整正文。`,
-      });
-
-      setFinalNovel(content);
-    } catch (error) {
-      setFinalError(getErrorMessage(error));
-    } finally {
-      setIsGeneratingNovel(false);
-    }
+    await generatedNovel.generate({
+      prompt: contextSummary,
+      chapterCount: 6,
+      language: "zh-CN",
+      style: steps.style.content,
+    });
   }
 
   return (
@@ -220,15 +209,66 @@ export default function NovelPlannerPage() {
           <h2>最终上下文</h2>
           <p>这里汇总前四步结果，最终小说生成会完整携带这些内容。</p>
           <div className="context-preview">{contextSummary}</div>
-          <button disabled={!canGenerateNovel || isGeneratingNovel} onClick={() => void generateFinalNovel()} type="button">
-            {isGeneratingNovel ? "生成小说中..." : "基于上下文生成最终小说"}
+          <button disabled={!canGenerateNovel || generatedNovel.isGenerating} onClick={() => void generateFinalNovel()} type="button">
+            {generatedNovel.isGenerating ? "逐章生成小说中..." : "基于上下文生成最终小说"}
           </button>
-          {finalError && <p className="planner-error">{finalError}</p>}
-          {finalNovel && <pre className="final-novel-output">{finalNovel}</pre>}
+          {generatedNovel.error && <p className="planner-error">{generatedNovel.error}</p>}
+          {generatedNovel.novel && (
+            <section className="generated-novel-panel">
+              <div className="generated-novel-header">
+                <span>{generatedNovel.job?.status || "generating"}</span>
+                <h3>{generatedNovel.novel.title}</h3>
+                {generatedNovel.novel.description && <p>{generatedNovel.novel.description}</p>}
+              </div>
+              <div className="generation-progress-bar" aria-label="小说生成进度">
+                <span
+                  style={{
+                    width: `${getGenerationProgress(
+                      generatedNovel.job?.completedChapters || 0,
+                      generatedNovel.job?.totalChapters || generatedNovel.chapters.length,
+                    )}%`,
+                  }}
+                />
+              </div>
+              <p className="generation-progress-text">
+                已完成 {generatedNovel.job?.completedChapters || 0} / {generatedNovel.job?.totalChapters || generatedNovel.chapters.length} 章
+              </p>
+              <div className="generated-chapter-list">
+                {generatedNovel.chapters.map((chapter) => (
+                  <article
+                    className={`generated-chapter-card ${chapter.id === generatedNovel.currentChapterId ? "active" : ""}`}
+                    key={chapter.id}
+                  >
+                    <header>
+                      <span>第 {chapter.order} 章</span>
+                      <strong>{chapter.title}</strong>
+                      <small>{getChapterStatusLabel(chapter.status)}</small>
+                    </header>
+                    {chapter.brief && <p>{chapter.brief}</p>}
+                    {chapter.content && <pre>{chapter.content}</pre>}
+                    {!chapter.content && chapter.status !== "failed" && <em>等待生成正文...</em>}
+                    {chapter.errorMessage && <em>{chapter.errorMessage}</em>}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         </aside>
       </section>
     </main>
   );
+}
+
+function getGenerationProgress(completed: number, total: number) {
+  if (!total) return 0;
+  return Math.round((completed / total) * 100);
+}
+
+function getChapterStatusLabel(status: string) {
+  if (status === "completed") return "已完成";
+  if (status === "generating") return "生成中";
+  if (status === "failed") return "失败";
+  return "等待中";
 }
 
 function StepButton({

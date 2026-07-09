@@ -687,6 +687,111 @@ select {
   font-size: 13px;
 }
 
+.generated-novel-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.generated-novel-header {
+  border: 1px solid #decebd;
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.88);
+  padding: 14px;
+}
+
+.generated-novel-header span,
+.generated-chapter-card span,
+.generated-chapter-card small {
+  color: #8f4318;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.generated-novel-header h3 {
+  margin: 6px 0;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 22px;
+}
+
+.generated-novel-header p {
+  margin: 0;
+}
+
+.generation-progress-bar {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #eadccf;
+}
+
+.generation-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #b65f2b;
+  transition: width 220ms ease;
+}
+
+.generation-progress-text {
+  margin: 0;
+  color: #726558;
+  font-size: 13px;
+}
+
+.generated-chapter-list {
+  display: grid;
+  gap: 12px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.generated-chapter-card {
+  border: 1px solid #decebd;
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.88);
+  padding: 14px;
+}
+
+.generated-chapter-card.active {
+  border-color: #b65f2b;
+  box-shadow: 0 0 0 3px rgba(182, 95, 43, 0.12);
+}
+
+.generated-chapter-card header {
+  display: grid;
+  gap: 4px;
+}
+
+.generated-chapter-card strong {
+  color: #29231e;
+  font-size: 15px;
+}
+
+.generated-chapter-card p,
+.generated-chapter-card em {
+  display: block;
+  margin: 10px 0 0;
+  color: #726558;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.generated-chapter-card pre {
+  max-height: 260px;
+  margin: 12px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #29231e;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 220px minmax(0, 1fr);

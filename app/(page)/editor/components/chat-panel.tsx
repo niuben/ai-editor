@@ -1,6 +1,6 @@
 import type { FormEvent, KeyboardEvent } from "react";
 
-import type { ChatMessage } from "../../../lib/types";
+import type { ChatMessage } from "@/app/lib/types";
 
 type ChatPanelProps = {
   messages: ChatMessage[];

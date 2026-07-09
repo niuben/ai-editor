@@ -1,4 +1,4 @@
-import type { Chapter } from "../../../lib/types";
+import type { Chapter } from "@/app/lib/types";
 
 type ChapterSidebarProps = {
   chapters: Chapter[];

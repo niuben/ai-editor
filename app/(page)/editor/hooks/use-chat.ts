@@ -2,9 +2,9 @@ import type { Editor } from "@tiptap/react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useState } from "react";
 
-import { callDeepSeek, getErrorMessage } from "../../../lib/deepseek";
-import { parseNovelAction } from "../../../lib/novel-actions";
-import type { Chapter, ChatMessage, NovelAction } from "../../../lib/types";
+import { callLegacyAI, getAIErrorMessage } from "@/app/lib/ai/client";
+import { parseNovelAction } from "@/app/lib/novel-actions";
+import type { Chapter, ChatMessage, NovelAction } from "@/app/lib/types";
 
 type UseChatOptions = {
   activeChapter: Chapter;
@@ -20,7 +20,7 @@ export function useChat({
   applyNovelAction,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "system", content: "右侧可以和 DeepSeek 对话。左侧编辑器里按 Tab 可以尝试自动扩写。" },
+    { role: "system", content: "右侧可以和 AI 助手对话。左侧编辑器里按 Tab 可以尝试自动扩写。" },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
@@ -44,7 +44,7 @@ export function useChat({
     setIsChatting(true);
 
     try {
-      const content = await callDeepSeek({
+      const content = await callLegacyAI({
         mode: "chat",
         messages: [
           {
@@ -66,7 +66,7 @@ export function useChat({
       pushMessage({ role: "assistant", content });
       applyAssistantContent(content);
     } catch (error) {
-      pushMessage({ role: "assistant", content: getErrorMessage(error) });
+      pushMessage({ role: "assistant", content: getAIErrorMessage(error) });
     } finally {
       setIsChatting(false);
     }
@@ -81,7 +81,7 @@ export function useChat({
     setIsChatting(true);
 
     try {
-      const content = await callDeepSeek({
+      const content = await callLegacyAI({
         mode: "novel",
         prompt,
       });
@@ -98,7 +98,7 @@ export function useChat({
         content: `已创建 ${createdCount} 个章节，并写入每章内容。`,
       });
     } catch (error) {
-      pushMessage({ role: "assistant", content: getErrorMessage(error) });
+      pushMessage({ role: "assistant", content: getAIErrorMessage(error) });
     } finally {
       setIsChatting(false);
     }

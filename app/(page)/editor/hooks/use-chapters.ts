@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
-import { emptyDoc, initialChapters, novelPlanToDoc } from "../../../lib/documents";
-import type { Chapter, NovelAction } from "../../../lib/types";
+import { emptyDoc, initialChapters, novelPlanToDoc } from "@/app/lib/documents";
+import type { Chapter, NovelAction } from "@/app/lib/types";
 
 export function useChapters() {
   const [chapters, setChapters] = useState<Chapter[]>(initialChapters);

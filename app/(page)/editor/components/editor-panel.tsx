@@ -1,7 +1,7 @@
 import { EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 
-import type { Chapter } from "../../../lib/types";
+import type { Chapter } from "@/app/lib/types";
 
 type EditorPanelProps = {
   editor: Editor | null;
