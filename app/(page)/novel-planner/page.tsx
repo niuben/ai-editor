@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { callDeepSeek, getErrorMessage } from "../lib/deepseek";
+import { callDeepSeek, getErrorMessage } from "../../lib/deepseek";
 
 type GeneratedStep = "characters_plot" | "worldview" | "style";
 
@@ -32,7 +32,7 @@ function createStepState(): StepState {
   };
 }
 
-export function NovelPlannerPage() {
+export default function NovelPlannerPage() {
   const [premise, setPremise] = useState("");
   const [steps, setSteps] = useState<Record<GeneratedStep, StepState>>({
     characters_plot: createStepState(),

@@ -2,14 +2,14 @@
 
 import { useEffect } from "react";
 
-import { ChapterSidebar } from "../components/chapter-sidebar";
-import { ChatPanel } from "../components/chat-panel";
-import { EditorPanel } from "../components/editor-panel";
-import { useChapters } from "../hooks/use-chapters";
-import { useChat } from "../hooks/use-chat";
-import { useEditor } from "../hooks/use-editor";
+import { ChapterSidebar } from "../../components/chapter-sidebar";
+import { ChatPanel } from "../../components/chat-panel";
+import { EditorPanel } from "../../components/editor-panel";
+import { useChapters } from "../../hooks/use-chapters";
+import { useChat } from "../../hooks/use-chat";
+import { useEditor } from "../../hooks/use-editor";
 
-export function EditorPage() {
+export default function EditorPage() {
   const {
     chapters,
     activeChapter,

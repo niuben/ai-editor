@@ -1,5 +1,5 @@
-import { NovelPlannerPage } from "./pages/novel-planner-page";
+import NovelPlannerPage from "./(page)/novel-planner/page";
 
-export default function Home() {
+export default function PlannerPage() {
   return <NovelPlannerPage />;
 }
