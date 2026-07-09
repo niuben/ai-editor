@@ -9,7 +9,7 @@ import {
   GhostSuggestion,
   getGhostSuggestion,
   setGhostSuggestion,
-} from "../editor/ghost-suggestion";
+} from "../lib/editor/ghost-suggestion";
 import { callDeepSeek, getErrorMessage } from "../lib/deepseek";
 import { parseChapters, textToDoc } from "../lib/documents";
 import type { Chapter } from "../lib/types";
